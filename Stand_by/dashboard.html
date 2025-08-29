@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rural Tech Hub - Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Arial', sans-serif;
+    }
+
+    body {
+      background: linear-gradient(45deg, #1e90ff, #87ceeb);
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    .dashboard-container {
+      background: white;
+      padding: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .dashboard-container h1 {
+      color: #333;
+      margin-bottom: 1rem;
+    }
+
+    .nav-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+
+    .nav-bar button {
+      padding: 0.5rem 1rem;
+      background: #1e90ff;
+      border: none;
+      border-radius: 5px;
+      color: white;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .nav-bar button:hover {
+      background: #187bcd;
+    }
+
+    .section {
+      margin-bottom: 2rem;
+    }
+
+    .section h2 {
+      color: #333;
+      margin-bottom: 1rem;
+    }
+
+    .courses-list {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .course-card {
+      background: #f9f9f9;
+      padding: 1rem;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .course-card button {
+      padding: 0.5rem 1rem;
+      background: #1e90ff;
+      border: none;
+      border-radius: 5px;
+      color: white;
+      cursor: pointer;
+    }
+
+    .course-card button:hover {
+      background: #187bcd;
+    }
+
+    .announcements-list {
+      background: #f9f9f9;
+      padding: 1rem;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    .announcement {
+      margin-bottom: 0.5rem;
+    }
+
+    .error-message {
+      color: red;
+      text-align: center;
+      margin-top: 1rem;
+      display: none;
+    }
+  </style>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"></script>
+</head>
+<body>
+  <div class="dashboard-container">
+    <div class="nav-bar">
+      <h1 id="welcome-message">Welcome</h1>
+      <div>
+        <button onclick="window.location.href='profile.html'">View Profile</button>
+        <button id="logout-button">Logout</button>
+      </div>
+    </div>
+    <div class="section">
+      <h2>Your Courses</h2>
+      <div class="courses-list" id="courses-list">
+        <!-- Courses will be dynamically added here -->
+      </div>
+    </div>
+    <div class="section">
+      <h2>Announcements</h2>
+      <div class="announcements-list" id="announcements-list">
+        <!-- Announcements will be dynamically added here -->
+      </div>
+    </div>
+    <div class="error-message" id="error-message"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+    import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+    import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyD-y_8SrweE8Dy8biqK5EI5xFsEsX8W91g",
+      authDomain: "rth-student-portal.firebaseapp.com",
+      projectId: "rth-student-portal",
+      storageBucket: "rth-student-portal.firebasestorage.app",
+      messagingSenderId: "91702279803",
+      appId: "1:91702279803:web:976902b3ebd856a368acde",
+      measurementId: "G-KX2YK8H06T"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // Inactivity timeout (3 minutes = 180000 ms)
+    let inactivityTimeout;
+    const INACTIVITY_LIMIT = 180000; // 3 minutes
+
+    function resetInactivityTimer() {
+      clearTimeout(inactivityTimeout);
+      inactivityTimeout = setTimeout(() => {
+        signOut(auth)
+          .then(() => {
+            console.log('User signed out due to inactivity');
+            window.location.href = 'index.html';
+          })
+          .catch((error) => {
+            console.error('Inactivity sign-out error:', error);
+            const errorMessage = document.getElementById('error-message');
+            errorMessage.textContent = 'Error signing out due to inactivity.';
+            errorMessage.style.display = 'block';
+          });
+      }, INACTIVITY_LIMIT);
+    }
+
+    // Track user activity
+    ['mousemove', 'keydown', 'click', 'touchstart'].forEach((event) => {
+      document.addEventListener(event, resetInactivityTimer);
+    });
+
+    const welcomeMessage = document.getElementById('welcome-message');
+    const coursesList = document.getElementById('courses-list');
+    const announcementsList = document.getElementById('announcements-list');
+    const errorMessage = document.getElementById('error-message');
+    const logoutButton = document.getElementById('logout-button');
+
+    // Check if user is logged in
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log('User is logged in:', user.email);
+        welcomeMessage.textContent = `Welcome, ${user.displayName || user.email.split('@')[0]}`;
+        resetInactivityTimer(); // Start inactivity timer
+        loadCourses(user.uid);
+        loadAnnouncements();
+      } else {
+        console.log('No user is logged in, redirecting to login');
+        window.location.href = 'index.html';
+      }
+    });
+
+    // Load enrolled courses
+    async function loadCourses(userId) {
+      try {
+        const coursesSnapshot = await getDocs(collection(db, `users/${userId}/courses`));
+        coursesList.innerHTML = '';
+        if (coursesSnapshot.empty) {
+          coursesList.innerHTML = '<p>No courses enrolled.</p>';
+          return;
+        }
+        coursesSnapshot.forEach((doc) => {
+          const course = doc.data();
+          const courseElement = document.createElement('div');
+          courseElement.className = 'course-card';
+          courseElement.innerHTML = `
+            <span>${course.name} - ${course.progress || 0}% Complete</span>
+            <button onclick="window.location.href='course.html?courseId=${doc.id}'">View Course</button>
+          `;
+          coursesList.appendChild(courseElement);
+        });
+      } catch (error) {
+        console.error('Error loading courses:', error);
+        errorMessage.textContent = 'Failed to load courses.';
+        errorMessage.style.display = 'block';
+      }
+    }
+
+    // Load announcements
+    async function loadAnnouncements() {
+      try {
+        const announcementsSnapshot = await getDocs(collection(db, 'announcements'));
+        announcementsList.innerHTML = '';
+        if (announcementsSnapshot.empty) {
+          announcementsList.innerHTML = '<p>No announcements available.</p>';
+          return;
+        }
+        announcementsSnapshot.forEach((doc) => {
+          const announcement = doc.data();
+          const announcementElement = document.createElement('div');
+          announcementElement.className = 'announcement';
+          announcementElement.innerHTML = `
+            <strong>${announcement.title}</strong> (${new Date(announcement.timestamp).toLocaleDateString()}): ${announcement.content}
+          `;
+          announcementsList.appendChild(announcementElement);
+        });
+      } catch (error) {
+        console.error('Error loading announcements:', error);
+        errorMessage.textContent = 'Failed to load announcements.';
+        errorMessage.style.display = 'block';
+      }
+    }
+
+    // Logout
+    logoutButton.addEventListener('click', () => {
+      signOut(auth)
+        .then(() => {
+          console.log('User logged out');
+          window.location.href = 'index.html';
+        })
+        .catch((error) => {
+          console.error('Logout error:', error);
+          errorMessage.textContent = 'Failed to log out.';
+          errorMessage.style.display = 'block';
+        });
+    });
+  </script>
+</body>
+</html>

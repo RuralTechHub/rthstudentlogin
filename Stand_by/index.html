@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rural Tech Hub - Student Portal Login</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Arial', sans-serif;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(45deg, #1e90ff, #87ceeb);
+    }
+
+    .login-container {
+      background: white;
+      padding: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .login-container h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 1.5rem;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      color: #555;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 1rem;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #1e90ff;
+      box-shadow: 0 0 5px rgba(30, 144, 255, 0.3);
+    }
+
+    .password-container {
+      position: relative;
+    }
+
+    .password-toggle {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: pointer;
+      font-size: 1.2rem;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.75rem;
+      background: #1e90ff;
+      border: none;
+      border-radius: 5px;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background: #187bcd;
+    }
+
+    .forgot-password {
+      text-align: center;
+      margin-top: 1rem;
+    }
+
+    .forgot-password a {
+      color: #1e90ff;
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+
+    .forgot-password a:hover {
+      text-decoration: underline;
+    }
+
+    .error-message {
+      color: red;
+      text-align: center;
+      margin-top: 1rem;
+      display: none;
+    }
+  </style>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js"></script>
+</head>
+<body>
+  <div class="login-container">
+    <h1>Rural Tech Hub</h1>
+    <form id="login-form">
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" placeholder="Enter your email" required>
+      </div>
+      <div class="form-group password-container">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Enter your password" required>
+        <span class="password-toggle" id="password-toggle">👁️</span>
+      </div>
+      <button type="submit">Log In</button>
+      <div class="forgot-password">
+        <a href="#" id="forgot-password">Forgot Password?</a>
+      </div>
+      <div class="error-message" id="error-message"></div>
+    </form>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, sendPasswordResetEmail, setPersistence, browserSessionPersistence } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyD-y_8SrweE8Dy8biqK5EI5xFsEsX8W91g",
+      authDomain: "rth-student-portal.firebaseapp.com",
+      projectId: "rth-student-portal",
+      storageBucket: "rth-student-portal.firebasestorage.app",
+      messagingSenderId: "91702279803",
+      appId: "1:91702279803:web:976902b3ebd856a368acde",
+      measurementId: "G-KX2YK8H06T"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    // Set session persistence
+    setPersistence(auth, browserSessionPersistence)
+      .then(() => {
+        console.log('Session persistence set to browserSessionPersistence');
+      })
+      .catch((error) => {
+        console.error('Error setting persistence:', error);
+      });
+
+    const loginForm = document.getElementById('login-form');
+    const forgotPasswordLink = document.getElementById('forgot-password');
+    const errorMessage = document.getElementById('error-message');
+    const passwordInput = document.getElementById('password');
+    const passwordToggle = document.getElementById('password-toggle');
+
+    // Inactivity timeout (3 minutes = 180000 ms)
+    let inactivityTimeout;
+    const INACTIVITY_LIMIT = 180000; // 3 minutes
+
+    function resetInactivityTimer() {
+      clearTimeout(inactivityTimeout);
+      inactivityTimeout = setTimeout(() => {
+        auth.signOut()
+          .then(() => {
+            console.log('User signed out due to inactivity');
+            window.location.href = 'index.html';
+          })
+          .catch((error) => {
+            console.error('Inactivity sign-out error:', error);
+            errorMessage.textContent = 'Error signing out due to inactivity.';
+            errorMessage.style.display = 'block';
+          });
+      }, INACTIVITY_LIMIT);
+    }
+
+    // Track user activity
+    ['mousemove', 'keydown', 'click', 'touchstart'].forEach((event) => {
+      document.addEventListener(event, resetInactivityTimer);
+    });
+
+    // Show/Hide Password Toggle
+    passwordToggle.addEventListener('click', () => {
+      const type = passwordInput.type === 'password' ? 'text' : 'password';
+      passwordInput.type = type;
+      passwordToggle.textContent = type === 'password' ? '👁️' : '🙈';
+    });
+
+    // Login Form Submission
+    loginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      console.log('Attempting login with:', email);
+
+      signInWithEmailAndPassword(auth, email, password)
+        .then((userCredential) => {
+          console.log('Login successful:', userCredential.user.email);
+          resetInactivityTimer(); // Start inactivity timer on login
+          window.location.href = 'dashboard.html';
+        })
+        .catch((error) => {
+          console.error('Login error:', error.code, error.message);
+          errorMessage.textContent = error.message;
+          errorMessage.style.display = 'block';
+        });
+    });
+
+    // Forgot Password
+    forgotPasswordLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      if (email) {
+        sendPasswordResetEmail(auth, email)
+          .then(() => {
+            alert('Password reset email sent! Check your inbox.');
+          })
+          .catch((error) => {
+            console.error('Password reset error:', error.code, error.message);
+            errorMessage.textContent = error.message;
+            errorMessage.style.display = 'block';
+          });
+      } else {
+        errorMessage.textContent = 'Please enter your email address first.';
+        errorMessage.style.display = 'block';
+      }
+    });
+
+    // Check if user is already logged in
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log('User is logged in:', user.email);
+        resetInactivityTimer(); // Start inactivity timer
+        window.location.href = 'dashboard.html';
+      }
+    });
+  </script>
+</body>
+</html>
